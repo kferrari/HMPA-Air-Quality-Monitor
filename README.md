@@ -5,3 +5,4 @@ Pasted together from different sources:
   * https://github.com/jedp/PMSensor-HPMA115
   * https://github.com/mathworks/thingspeak-arduino
   * https://github.com/adafruit/Adafruit_NeoPixel
+  * https://create.arduino.cc/projecthub/AppsByDavideV/iot-telegram-bot-with-arduino-mkr-wifi-1010-b835a4

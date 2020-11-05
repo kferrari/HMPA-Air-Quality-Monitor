@@ -20,6 +20,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #include <ThingSpeak.h>
+#include "ESP8266TelegramBOT.h"
 
 // WiFi settings
 char ssid[] = SECRET_SSID; //  your network SSID (name)
@@ -31,6 +32,14 @@ char server[] = "api.thingspeak.com";
 String writeAPIKey = SECRET_API_KEY;
 unsigned long lastConnectionTime = 0; // track the last connection time
 const unsigned long postingInterval = 60L * 1000L; // post data every 60 seconds
+
+// Telegram Bot settings
+void Bot_EchoMessages();
+TelegramBOT bot(BOT_TOKEN, BOT_NAME, BOT_USERNAME);
+
+unsigned long botLastTime = 0;
+const unsigned long botPostingInterval = 24L * 60L * 60L * 1000L; // post data once every day
+const String  Sender = "AQM01";  
 
 // HPMA settings and variables
 #define HPMA_RX 5
@@ -88,7 +97,8 @@ void setup() {
 }
 
 // In the loop, we can just poll for new data since the device automatically
-// enters auto-send mode on startup.
+// enters auto-send mode on startup. Postings are nested, so we don't have to 
+// run all the checks in every iteration.
 void loop() {
   if (hpm.isNewDataAvailable()) {
 
@@ -126,6 +136,11 @@ void loop() {
         ledIndicator();
         Serial.println("LED updated");
         lastAqi = aqi;
+      }
+
+      // Only post to Telegram once in 24h. 
+      if(millis() - botLastTime > botPostingInterval) {
+        bot.sendMessage(Sender, "Air Quality Index is " + aqi, "");
       }
     }
   }
