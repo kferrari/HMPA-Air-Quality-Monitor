@@ -1,5 +1,14 @@
 # Air quality monitor (Arduino Nano 33 IOT &amp; HMPA115)
 
+Required libraries
+ * UniversalTelegramBot
+ * Adafruit Neopixel
+ * HPMA115_Compact
+ * WiFiNINA
+ * ThingSpeak
+
+
+
 Pasted together from different sources:
   * https://github.com/ostaquet/Arduino-Nano-33-IoT-Ultimate-Guide
   * https://github.com/jedp/PMSensor-HPMA115
