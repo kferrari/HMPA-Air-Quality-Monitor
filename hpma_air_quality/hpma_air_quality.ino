@@ -20,7 +20,7 @@
 #include <Adafruit_NeoPixel.h>
 
 #include <ThingSpeak.h>
-#include "ESP8266TelegramBOT.h"
+#include <UniversalTelegramBot.h>
 
 // Setup
 #define USE_LED
@@ -37,14 +37,14 @@
   String writeAPIKey = SECRET_API_KEY;
   unsigned long lastConnectionTime = 0; // track the last connection time
   const unsigned long postingInterval = 60L * 1000L; // post data every 60 seconds
-  
-  // Telegram Bot settings
-  void Bot_EchoMessages();
-  TelegramBOT bot(BOT_TOKEN, BOT_NAME, BOT_USERNAME);
-  
+
+  // WiFi Client
+  WiFiSSLClient client;
+
+  // Telegram bot
+  UniversalTelegramBot bot(BOT_TOKEN, client);  
   unsigned long botLastTime = 0;
-  const unsigned long botPostingInterval = 1000L; // 24L * 60L * 60L * 1000L; // post data once every day
-  const String  Sender = "AQM01";  
+  const unsigned long botPostingInterval = 24L * 60L * 60L * 1000L; // post data once every day
 #endif
 
 // HPMA settings and variables
@@ -60,11 +60,6 @@ uint16_t loopCount = 0;
 #endif
 
 int aqi11;
-
-#ifdef USE_WIFI
-  // Initialize the Wifi client library
-  WiFiClient client;
-#endif
 
 #ifdef USE_LED
   // Initialize NeoPixel ring
@@ -120,6 +115,7 @@ void setup() {
   }
 
   Serial.println("All set");
+
 }
 
 // In the loop, we can just poll for new data since the device automatically
@@ -171,13 +167,16 @@ void loop() {
         Serial.println("Data sent to ThingSpeak");
     
         // Only post to Telegram once in 24h. 
+        char message[12];
+        sprintf(message, "AQI: %d", aqi);
         if(millis() - botLastTime > botPostingInterval) {
-          bot.sendMessage(Sender, "Air Quality Index is " + aqi, "");
+          bot.sendMessage(USER_ID, message, "");
         }
       #endif
   
       // Reset counter and cumulative variables
       loopCount = aqiCum = pm1Cum = pm25Cum = pm4Cum = pm10Cum = 0;
+      lastConnectionTime = millis();
     }
 
     // Update LED indicator only if AQI changed
