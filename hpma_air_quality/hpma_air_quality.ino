@@ -23,8 +23,8 @@
 #include "ESP8266TelegramBOT.h"
 
 // Setup
-//#define USE_LED
-//#define USE_WIFI
+#define USE_LED
+#define USE_WIFI
 
 #ifdef USE_WIFI
   // WiFi settings
@@ -43,19 +43,23 @@
   TelegramBOT bot(BOT_TOKEN, BOT_NAME, BOT_USERNAME);
   
   unsigned long botLastTime = 0;
-  const unsigned long botPostingInterval = 24L * 60L * 60L * 1000L; // post data once every day
+  const unsigned long botPostingInterval = 1000L; // 24L * 60L * 60L * 1000L; // post data once every day
   const String  Sender = "AQM01";  
 #endif
 
 // HPMA settings and variables
 // Connect HPMA to Nano pin 1 and 2 (Serial1 RX and TX)
 uint16_t pm1, pm25, pm4, pm10, aqi, lastAqi;
+unsigned long pm1Cum, pm25Cum, pm4Cum, pm10Cum, aqiCum;
+uint16_t loopCount = 0;
 
 #ifdef USE_LED
   // Neopixel settigns
   #define LEDPIN 2
   #define NUMPIXELS 12
 #endif
+
+int aqi11;
 
 #ifdef USE_WIFI
   // Initialize the Wifi client library
@@ -90,19 +94,6 @@ void setup() {
   // Note carefully the '&' in this line.
   hpm.begin(&Serial1);
 
-  #ifdef USE_WIFI
-    // Connect to WPA/WPA2 Wi-Fi network
-    Serial.println("Connecting Wifi");
-    status = WiFi.begin(ssid, pass);
-      
-    while ( status != WL_CONNECTED) {
-  
-      // wait 1 second for connection
-      delay(1000);
-      Serial.print(".");
-    }
-  #endif
-  
   #ifdef USE_LED
     ring.begin();
     ring.setBrightness(25);
@@ -110,6 +101,17 @@ void setup() {
     ring.show(); // initialize LED 1;
   #endif
   
+  #ifdef USE_WIFI
+    // Connect to WPA/WPA2 Wi-Fi network
+    Serial.println("Connecting Wifi");
+      
+    while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
+  
+      // wait 1 second for connection
+      rainbowCycle(10);
+      Serial.print(".");
+    }
+  #endif
   // Wait until HPM is ready
   Serial.println("Waking up HPM ...");
   while (!hpm.isNewDataAvailable()) {
@@ -125,18 +127,28 @@ void setup() {
 // run all the checks in every iteration.
 void loop() {
   if (hpm.isNewDataAvailable()) {
+    // Increment counter
+    loopCount++;
 
     // get readings
-    aqi = hpm.getAQI();
-    pm1 = hpm.getPM1();
-    pm25 = hpm.getPM25();
-    pm4 = hpm.getPM4();
-    pm10 = hpm.getPM10();
+    aqiCum += hpm.getAQI();
+    pm1Cum += hpm.getPM1();
+    pm25Cum += hpm.getPM25();
+    pm4Cum += hpm.getPM4();
+    pm10Cum += hpm.getPM10();
 
-    int aqi11 = map(aqi, 0, 300, 1, 11);
+    aqi = aqiCum / loopCount;
+    pm1 = pm1Cum / loopCount;
+    pm25 = pm25Cum / loopCount;
+    pm4 = pm4Cum / loopCount;
+    pm10 = pm10Cum / loopCount;
+
+    aqi11 = map(aqi, 1, 500, 1, 11);
 
     // Print to serial
-    Serial.print("AQI: ");
+    Serial.print("Iteration: ");
+    Serial.print(loopCount);
+    Serial.print("  AQI: ");
     Serial.print(aqi);
     Serial.print("  PM 1 = ");
     Serial.print(pm1);
@@ -150,27 +162,30 @@ void loop() {
     Serial.print(aqi11);
     Serial.println();
 
-    #ifdef USE_WIFI
-      // Only push data and update LEDs after timeout period
-      if (millis() - lastConnectionTime > postingInterval) {
-  
+    
+    // Only push data and update LEDs after timeout period
+    if (millis() - lastConnectionTime > postingInterval) {
+      #ifdef USE_WIFI
         // Update ThingSpeak
         httpRequest();
         Serial.println("Data sent to ThingSpeak");
-  
-        // Update LED indicator only if AQI changed
-        #ifdef USE_LED
-          if (aqi != lastAqi) {
-            ledIndicator();
-            Serial.println("LED updated");
-            lastAqi = aqi;
-          }
-        #endif
-  
+    
         // Only post to Telegram once in 24h. 
         if(millis() - botLastTime > botPostingInterval) {
           bot.sendMessage(Sender, "Air Quality Index is " + aqi, "");
         }
+      #endif
+  
+      // Reset counter and cumulative variables
+      loopCount = aqiCum = pm1Cum = pm25Cum = pm4Cum = pm10Cum = 0;
+    }
+
+    // Update LED indicator only if AQI changed
+    #ifdef USE_LED
+      if (aqi11 != lastAqi) {
+        ledIndicator();
+        Serial.println("LED updated");
+        lastAqi = aqi11;
       }
     #endif
   } else {
@@ -222,16 +237,14 @@ void httpRequest() {
 // Fill the dots one after the other with a color
 void ledIndicator() {
 
-  // Map AQI onto LED range (0-11)
-  int aqi11 = map(aqi, 0, 300, 1, 11);
-
   // Set unused pixels to off
-  for (uint16_t i = ring.numPixels() - 1; i > aqi11; i--) {
+  for (int i = ring.numPixels() - 1; i == aqi11; i--) {
     ring.setPixelColor(i, ring.Color(0, 0, 0));
   }
 
   // Step through pixels in reverse order
-  for (uint16_t i = aqi11; i > 0; i--) {
+  for (uint16_t i = aqi11-1; i > 0; i--) {
+    Serial.print(i);
     if (i > 7) {
       ring.setPixelColor(i, ring.Color(152, 1, 1));
     } else if (i == 7) {
@@ -248,5 +261,30 @@ void ledIndicator() {
 
   // Update LEDs
   ring.show();
+}
+
+void rainbowCycle(uint8_t wait) {
+  uint16_t i, j;
+
+  for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
+    for(i=0; i< ring.numPixels(); i++) {
+      ring.setPixelColor(i, Wheel(((i * 256 / ring.numPixels()) + j) & 255));
+    }
+    ring.show();
+    delay(wait);
+  }
+}
+
+uint32_t Wheel(byte WheelPos) {
+  WheelPos = 255 - WheelPos;
+  if(WheelPos < 85) {
+    return ring.Color(255 - WheelPos * 3, 0, WheelPos * 3);
+  }
+  if(WheelPos < 170) {
+    WheelPos -= 85;
+    return ring.Color(0, WheelPos * 3, 255 - WheelPos * 3);
+  }
+  WheelPos -= 170;
+  return ring.Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
 #endif
