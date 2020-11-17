@@ -22,78 +22,102 @@
 #include <ThingSpeak.h>
 #include "ESP8266TelegramBOT.h"
 
-// WiFi settings
-char ssid[] = SECRET_SSID; //  your network SSID (name)
-char pass[] = SECRET_PASS; // your network password
-int status = WL_IDLE_STATUS;
+// Setup
+//#define USE_LED
+//#define USE_WIFI
 
-// ThingSpeak Settings
-char server[] = "api.thingspeak.com";
-String writeAPIKey = SECRET_API_KEY;
-unsigned long lastConnectionTime = 0; // track the last connection time
-const unsigned long postingInterval = 60L * 1000L; // post data every 60 seconds
-
-// Telegram Bot settings
-void Bot_EchoMessages();
-TelegramBOT bot(BOT_TOKEN, BOT_NAME, BOT_USERNAME);
-
-unsigned long botLastTime = 0;
-const unsigned long botPostingInterval = 24L * 60L * 60L * 1000L; // post data once every day
-const String  Sender = "AQM01";  
+#ifdef USE_WIFI
+  // WiFi settings
+  char ssid[] = SECRET_SSID; //  your network SSID (name)
+  char pass[] = SECRET_PASS; // your network password
+  int status = WL_IDLE_STATUS;
+  
+  // ThingSpeak Settings
+  char server[] = "api.thingspeak.com";
+  String writeAPIKey = SECRET_API_KEY;
+  unsigned long lastConnectionTime = 0; // track the last connection time
+  const unsigned long postingInterval = 60L * 1000L; // post data every 60 seconds
+  
+  // Telegram Bot settings
+  void Bot_EchoMessages();
+  TelegramBOT bot(BOT_TOKEN, BOT_NAME, BOT_USERNAME);
+  
+  unsigned long botLastTime = 0;
+  const unsigned long botPostingInterval = 24L * 60L * 60L * 1000L; // post data once every day
+  const String  Sender = "AQM01";  
+#endif
 
 // HPMA settings and variables
-#define HPMA_RX 5
-#define HPMA_TX 6
+// Connect HPMA to Nano pin 1 and 2 (Serial1 RX and TX)
 uint16_t pm1, pm25, pm4, pm10, aqi, lastAqi;
 
-// Neopixel settigns
-#define LEDPIN 2
-#define NUMPIXELS 12
+#ifdef USE_LED
+  // Neopixel settigns
+  #define LEDPIN 2
+  #define NUMPIXELS 12
+#endif
 
-// Initialize the Wifi client library
-WiFiClient client;
+#ifdef USE_WIFI
+  // Initialize the Wifi client library
+  WiFiClient client;
+#endif
 
-// Initialize NeoPixel ring
-Adafruit_NeoPixel ring = Adafruit_NeoPixel(NUMPIXELS, LEDPIN, NEO_GRB + NEO_KHZ800);
-
-// Create a hardware serial on pins 5 (RX) and 6 (TX)
-Uart hpmSerial (&sercom0, HPMA_RX, HPMA_TX, SERCOM_RX_PAD_1, UART_TX_PAD_0);
+#ifdef USE_LED
+  // Initialize NeoPixel ring
+  Adafruit_NeoPixel ring = Adafruit_NeoPixel(NUMPIXELS, LEDPIN, NEO_GRB + NEO_KHZ800);
+#endif
 
 // Create an object to communicate with the HPM Compact sensor.
 HPMA115_Compact hpm = HPMA115_Compact();
 
 void setup() {
-  // Reassign pins 5 and 6 to SERCOM alt
-  pinPeripheral(5, PIO_SERCOM_ALT);
-  pinPeripheral(6, PIO_SERCOM_ALT);
-
+  
   // Console serial.
-  Serial.begin(HPMA115_BAUD);
+  Serial.begin(115200);
+  while (!Serial) {
+    ; // wait for serial port to connect.
+  }
+  Serial.println("Serial initialized");
 
   // Serial for ineracting with HPM device.
-  hpmSerial.begin(HPMA115_BAUD);
+  Serial1.begin(HPMA115_BAUD);
+  while (!Serial1) {
+    ; // wait for serial port to connect.
+  }
+  Serial.println("HPMA serial initialized");
 
   // Configure the hpm object to refernce this serial stream.
   // Note carefully the '&' in this line.
-  hpm.begin(&hpmSerial);
+  hpm.begin(&Serial1);
 
-  while ( status != WL_CONNECTED) {
+  #ifdef USE_WIFI
     // Connect to WPA/WPA2 Wi-Fi network
+    Serial.println("Connecting Wifi");
     status = WiFi.begin(ssid, pass);
-
-    // wait 10 seconds for connection
-    delay(10000);
-  }
-
-  ring.begin();
-  ring.setBrightness(25);
-  ring.setPixelColor(0, ring.Color(20, 128, 21));
-  ring.show(); // initialize LED 1;
+      
+    while ( status != WL_CONNECTED) {
+  
+      // wait 1 second for connection
+      delay(1000);
+      Serial.print(".");
+    }
+  #endif
+  
+  #ifdef USE_LED
+    ring.begin();
+    ring.setBrightness(25);
+    ring.setPixelColor(0, ring.Color(20, 128, 21));
+    ring.show(); // initialize LED 1;
+  #endif
+  
   // Wait until HPM is ready
+  Serial.println("Waking up HPM ...");
   while (!hpm.isNewDataAvailable()) {
-    Serial.println("Still waking up HPM ...");
     delay(1000);
+    Serial.print(".");
   }
+
+  Serial.println("All set");
 }
 
 // In the loop, we can just poll for new data since the device automatically
@@ -109,47 +133,56 @@ void loop() {
     pm4 = hpm.getPM4();
     pm10 = hpm.getPM10();
 
+    int aqi11 = map(aqi, 0, 300, 1, 11);
+
     // Print to serial
     Serial.print("AQI: ");
     Serial.print(aqi);
     Serial.print("  PM 1 = ");
     Serial.print(pm1);
-    Serial.println();
-    Serial.print("PM 2.5 = ");
+    Serial.print("  PM 2.5 = ");
     Serial.print(pm25);
     Serial.print("  PM 4 = ");
     Serial.print(pm4);
-    Serial.println();
     Serial.print("  PM 10 = ");
     Serial.print(pm10);
+    Serial.print(" LED = ");
+    Serial.print(aqi11);
     Serial.println();
 
-    // Only push data and update LEDs after timeout period
-    if (millis() - lastConnectionTime > postingInterval) {
-
-      // Update ThingSpeak
-      httpRequest();
-      Serial.println("Data sent to ThingSpeak");
-
-      // Update LED indicator only if AQI changed
-      if (aqi != lastAqi) {
-        ledIndicator();
-        Serial.println("LED updated");
-        lastAqi = aqi;
+    #ifdef USE_WIFI
+      // Only push data and update LEDs after timeout period
+      if (millis() - lastConnectionTime > postingInterval) {
+  
+        // Update ThingSpeak
+        httpRequest();
+        Serial.println("Data sent to ThingSpeak");
+  
+        // Update LED indicator only if AQI changed
+        #ifdef USE_LED
+          if (aqi != lastAqi) {
+            ledIndicator();
+            Serial.println("LED updated");
+            lastAqi = aqi;
+          }
+        #endif
+  
+        // Only post to Telegram once in 24h. 
+        if(millis() - botLastTime > botPostingInterval) {
+          bot.sendMessage(Sender, "Air Quality Index is " + aqi, "");
+        }
       }
-
-      // Only post to Telegram once in 24h. 
-      if(millis() - botLastTime > botPostingInterval) {
-        bot.sendMessage(Sender, "Air Quality Index is " + aqi, "");
-      }
-    }
+    #endif
+  } else {
+    Serial.println("No new data");
   }
 
   // The physical sensor only sends data once per second.
-  delay(1000);
+  delay(2000);
 
 }
 
+#ifdef USE_WIFI
 void httpRequest() {
 
   // read Wi-Fi signal strength (rssi)
@@ -183,7 +216,9 @@ void httpRequest() {
     lastConnectionTime = millis();
   }
 }
+#endif
 
+#ifdef USE_LED
 // Fill the dots one after the other with a color
 void ledIndicator() {
 
@@ -208,9 +243,10 @@ void ledIndicator() {
     }
   }
 
-  // Alsways set first pixel (lowest AQI) as on indicator
+  // Always set first pixel (lowest AQI) as on indicator
   ring.setPixelColor(0, ring.Color(20, 128, 20));
 
   // Update LEDs
   ring.show();
 }
+#endif
