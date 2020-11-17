@@ -3,5 +3,4 @@
 #define SECRET_API_KEY ""
 
 #define BOT_TOKEN ""
-#define BOT_NAME ""
-#define BOT_USERNAME ""
+#define USER_ID ""
