@@ -73,16 +73,10 @@ void setup() {
   
   // Console serial.
   Serial.begin(115200);
-  while (!Serial) {
-    ; // wait for serial port to connect.
-  }
   Serial.println("Serial initialized");
 
   // Serial for ineracting with HPM device.
   Serial1.begin(HPMA115_BAUD);
-  while (!Serial1) {
-    ; // wait for serial port to connect.
-  }
   Serial.println("HPMA serial initialized");
 
   // Configure the hpm object to refernce this serial stream.
