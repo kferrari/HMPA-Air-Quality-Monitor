@@ -23,11 +23,11 @@ Reads values from HPMA115 particulate matter sensor, displays air quality index 
  |  D2  |      |  IN |
  
 ## Required libraries
- * UniversalTelegramBot
- * Adafruit Neopixel
- * HPMA115_Compact
- * WiFiNINA
- * ThingSpeak
+ * [UniversalTelegramBot](https://github.com/witnessmenow/Universal-Arduino-Telegram-Bot)
+ * [Adafruit Neopixel](https://github.com/adafruit/Adafruit_NeoPixel)
+ * [HPMA115_Compact](https://github.com/jedp/PMSensor-HPMA115)
+ * [WiFiNINA](https://www.arduino.cc/en/Reference/WiFiNINA)
+ * [ThingSpeak](https://www.arduino.cc/reference/en/libraries/thingspeak/)
 
 ## Pasted together from different sources:
   * https://github.com/ostaquet/Arduino-Nano-33-IoT-Ultimate-Guide
