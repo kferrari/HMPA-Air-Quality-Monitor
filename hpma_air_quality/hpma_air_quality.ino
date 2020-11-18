@@ -23,6 +23,7 @@
 #include <UniversalTelegramBot.h>
 
 // Setup
+//#define PRINT_DEBUG_MESSAGES
 #define USE_LED
 #define USE_WIFI
 
@@ -85,7 +86,7 @@ void setup() {
 
   #ifdef USE_LED
     ring.begin();
-    ring.setBrightness(25);
+    ring.setBrightness(10);
     ring.setPixelColor(0, ring.Color(20, 128, 21));
     ring.show(); // initialize LED 1;
   #endif
@@ -99,6 +100,10 @@ void setup() {
       // wait 1 second for connection
       rainbowCycle(10);
       Serial.print(".");
+    }
+
+    for(int i=0; i< ring.numPixels(); i++) {
+      ring.setPixelColor(i, ring.Color(0,0,0));
     }
   #endif
   // Wait until HPM is ready
@@ -152,6 +157,14 @@ void loop() {
     Serial.print(aqi11);
     Serial.println();
 
+    // Reconnect WiFi if lost
+    while (WiFi.status() != WL_CONNECTED) {
+      WiFi.end();
+      Serial.println("Attempting to connect to Network.");
+      WiFi.begin(ssid, pass);
+      delay(2000);
+    }
+
     
     // Only push data and update LEDs after timeout period
     if (millis() - lastConnectionTime > postingInterval) {
@@ -159,18 +172,20 @@ void loop() {
         // Update ThingSpeak
         httpRequest();
         Serial.println("Data sent to ThingSpeak");
+        // Update the last connection time
+        lastConnectionTime = millis();
     
         // Only post to Telegram once in 24h. 
         char message[12];
         sprintf(message, "AQI: %d", aqi);
         if(millis() - botLastTime > botPostingInterval) {
           bot.sendMessage(USER_ID, message, "");
+          botLastTime = millis();
         }
       #endif
   
       // Reset counter and cumulative variables
       loopCount = aqiCum = pm1Cum = pm25Cum = pm4Cum = pm10Cum = 0;
-      lastConnectionTime = millis();
     }
 
     // Update LED indicator only if AQI changed
@@ -208,7 +223,8 @@ void httpRequest() {
   client.stop();
 
   // POST data to ThingSpeak
-  if (client.connect(server, 80)) {
+  if (client.connect(server, 443)) {
+    Serial.println("Connected to ThingSpeak");
     client.println("POST /update HTTP/1.1");
     client.println("Host: api.thingspeak.com");
     client.println("Connection: close");
@@ -220,8 +236,6 @@ void httpRequest() {
     client.print("\n\n");
     client.print(data);
 
-    // note the last connection time
-    lastConnectionTime = millis();
   }
 }
 #endif
