@@ -1,5 +1,8 @@
 # Air quality monitor (Arduino Nano 33 IOT &amp; HMPA115)
 
+Reads values from HPMA115 particulate matter sensor, displays air quality index to LED ring and sends data to ThingSpeak and Telegram.
+
+
 Required libraries
  * UniversalTelegramBot
  * Adafruit Neopixel
